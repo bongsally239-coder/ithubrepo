@@ -1,12 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authAPI } from '../services/api';
-import socketService from '../services/socket';
 
 export interface User {
   id: string;
   name: string;
   email: string;
-  role: 'customer' | 'owner' | 'agent' | 'admin';
+  role: 'customer' | 'owner' | 'agent' | 'admin' | 'manager' | 'driver';
   phone?: string;
   town?: string;
 }
@@ -26,15 +25,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('smartbite_token');
-    if (token) {
+    const storedUser = localStorage.getItem('smartbite_user');
+    if (storedUser) {
       authAPI.verify()
         .then(response => {
           setUser(response.data.user);
-          socketService.connect(token);
         })
         .catch(() => {
-          localStorage.removeItem('smartbite_token');
           localStorage.removeItem('smartbite_user');
         })
         .finally(() => {
@@ -48,14 +45,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
       const response = await authAPI.login({ email, password });
-      const { token, user: userData } = response.data;
-      
-      localStorage.setItem('smartbite_token', token);
+      const { user: userData } = response.data;
+
       localStorage.setItem('smartbite_user', JSON.stringify(userData));
       setUser(userData);
-      
-      socketService.connect(token);
-      
+
       return true;
     } catch (error) {
       console.error('Login error:', error);
@@ -66,14 +60,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const register = async (userData: any): Promise<boolean> => {
     try {
       const response = await authAPI.register(userData);
-      const { token, user: newUser } = response.data;
-      
-      localStorage.setItem('smartbite_token', token);
+      const { user: newUser } = response.data;
+
       localStorage.setItem('smartbite_user', JSON.stringify(newUser));
       setUser(newUser);
-      
-      socketService.connect(token);
-      
+
       return true;
     } catch (error) {
       console.error('Registration error:', error);
@@ -81,11 +72,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('smartbite_token');
+  const logout = async () => {
+    try {
+      await authAPI.logout?.();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
     localStorage.removeItem('smartbite_user');
     setUser(null);
-    socketService.disconnect();
   };
 
   return (
